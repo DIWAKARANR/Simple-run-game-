@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Run Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB, #E0F6FF);
+        }
+        .clouds {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 200%;
+            height: 100px;
+            background: linear-gradient(to bottom, 
+                rgba(255,255,255,0) 0%,
+                rgba(255,255,255,0.3) 50%,
+                rgba(255,255,255,0) 100%);
+            animation: moveClouds 20s linear infinite;
+        }
+        .ground {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 50px;
+            background: #8B4513;
+        }
+        .character {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 20px;
+            height: 40px;
+            background: #FF0000;
+        }
+        .cactus {
+            position: absolute;
+            bottom: 50px;
+            width: 20px;
+            height: 30px;
+            background: #00FF00;
+        }
+        .coin {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #FFD700;
+            border-radius: 50%;
+            animation: rotateCoin 1s linear infinite;
+        }
+        .score-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            color: #333;
+        }
+        .controls {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 10;
+        }
+        .button {
+            font-size: 24px;
+            padding: 15px 30px;
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            transition: background-color 0.3s;
+        }
+        #startButton {
+            background-color: #4CAF50;
+        }
+        #startButton:hover {
+            background-color: #45a049;
+        }
+        #jumpButton {
+            background-color: #008CBA;
+        }
+        #jumpButton:hover {
+            background-color: #007B9A;
+        }
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: red;
+            display: none;
+        }
+        @keyframes moveClouds {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        @keyframes rotateCoin {
+            0% { transform: rotateY(0deg); }
+            100% { transform: rotateY(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="clouds"></div>
+        <div class="ground"></div>
+        <div class="character" id="character"></div>
+        <div class="cactus" id="cactus1"></div>
+        <div class="cactus" id="cactus2"></div>
+        <div class="score-display" id="scoreDisplay">Distance: 0m | Coins: 0</div>
+        <div class="game-over" id="gameOver">Game Over</div>
+    </div>
+    <div class="controls">
+        <button class="button" id="startButton">Start</button>
+        <button class="button" id="jumpButton">Jump</button>
+    </div>
+    <audio id="backgroundMusic" loop>
+        <source src="https://opengameart.org/sites/default/files/Juhani%20Junkala%20%5bRetro%20Game%20Music%20Pack%5d%20Level%201.ogg" type="audio/ogg">
+        Your browser does not support the audio element.
+    </audio>
+    <script>
+        const character = document.getElementById('character');
+        const cactus1 = document.getElementById('cactus1');
+        const cactus2 = document.getElementById('cactus2');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const startButton = document.getElementById('startButton');
+        const jumpButton = document.getElementById('jumpButton');
+        const gameOverDisplay = document.getElementById('gameOver');
+        const gameContainer = document.querySelector('.game-container');
+        const backgroundMusic = document.getElementById('backgroundMusic');
+
+        let distance = 0;
+        let coins = 0;
+        let isJumping = false;
+        let gameRunning = false;
+        let cactus1Position = window.innerWidth;
+        let cactus2Position = window.innerWidth * 1.5;
+        let coinInterval;
+        let difficulty = 1;
+
+        function updateScore() {
+            distance += 1;
+            scoreDisplay.textContent = `Distance: ${distance}m | Coins: ${coins}`;
+        }
+
+        function checkCollision(element1, element2) {
+            const rect1 = element1.getBoundingClientRect();
+            const rect2 = element2.getBoundingClientRect();
+
+            return !(rect1.right < rect2.left || 
+                     rect1.left > rect2.right || 
+                     rect1.bottom < rect2.top || 
+                     rect1.top > rect2.bottom);
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            gameOverDisplay.style.display = 'block';
+            clearInterval(coinInterval);
+            backgroundMusic.pause();
+        }
+
+        function createCoin() {
+            const coin = document.createElement('div');
+            coin.classList.add('coin');
+            coin.style.left = `${window.innerWidth}px`;
+            coin.style.bottom = `${Math.random() * (window.innerHeight - 150) + 70}px`;
+            gameContainer.appendChild(coin);
+
+            const moveCoin = () => {
+                if (gameRunning) {
+                    const coinPosition = parseInt(coin.style.left);
+                    if (coinPosition > -30) {
+                        coin.style.left = `${coinPosition - 2 * difficulty}px`;
+                        if (checkCollision(character, coin)) {
+                            collectCoin(coin);
+                        }
+                        requestAnimationFrame(moveCoin);
+                    } else {
+                        coin.remove();
+                    }
+                }
+            };
+
+            requestAnimationFrame(moveCoin);
+        }
+
+        function collectCoin(coin) {
+            coins++;
+            coin.remove();
+            updateScore();
+        }
+
+        function moveCactus() {
+            if (gameRunning) {
+                cactus1Position -= 2 * difficulty;
+                cactus2Position -= 2 * difficulty;
+
+                if (cactus1Position < -40) {
+                    cactus1Position = window.innerWidth + Math.random() * 500;
+                }
+                if (cactus2Position < -40) {
+                    cactus2Position = window.innerWidth + Math.random() * 500;
+                }
+
+                cactus1.style.left = `${cactus1Position}px`;
+                cactus2.style.left = `${cactus2Position}px`;
+
+                if (checkCollision(character, cactus1) || checkCollision(character, cactus2)) {
+                    gameOver();
+                    return;
+                }
+
+                updateScore();
+                requestAnimationFrame(moveCactus);
+
+                // Increase difficulty over time
+                difficulty += 0.0001;
+            }
+        }
+
+        function jump() {
+            if (!isJumping && gameRunning) {
+                isJumping = true;
+                let jumpHeight = 0;
+                const jumpInterval = setInterval(() => {
+                    if (jumpHeight < 100 && jumpHeight >= 0) {
+                        jumpHeight += 5;
+                        character.style.bottom = `${50 + jumpHeight}px`;
+                    } else if (jumpHeight >= 100 && jumpHeight < 200) {
+                        jumpHeight += 5;
+                        character.style.bottom = `${250 - jumpHeight}px`;
+                    } else {
+                        clearInterval(jumpInterval);
+                        isJumping = false;
+                        character.style.bottom = '50px';
+                    }
+                }, 20);
+            }
+        }
+
+        startButton.addEventListener('click', () => {
+            if (!gameRunning) {
+                gameRunning = true;
+                distance = 0;
+                coins = 0;
+                difficulty = 1;
+                cactus1Position = window.innerWidth;
+                cactus2Position = window.innerWidth * 1.5;
+                gameOverDisplay.style.display = 'none';
+                moveCactus();
+                coinInterval = setInterval(createCoin, 2000);
+                backgroundMusic.play();
+            }
+        });
+
+        jumpButton.addEventListener('click', jump);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Space') {
+                jump();
+            }
+        });
+    </script>
+</body>
+  </html>
